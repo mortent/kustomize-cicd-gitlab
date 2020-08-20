@@ -1,0 +1,383 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    environment: dev
+  name: dev-gitlab
+---
+apiVersion: serviceusage.cnrm.cloud.google.com/v1beta1
+kind: Service
+metadata:
+  labels:
+    environment: dev
+  name: dev-cloudresourcemanager.googleapis.com
+  namespace: gitlab
+---
+apiVersion: serviceusage.cnrm.cloud.google.com/v1beta1
+kind: Service
+metadata:
+  labels:
+    environment: dev
+  name: dev-compute.googleapis.com
+  namespace: gitlab
+---
+apiVersion: serviceusage.cnrm.cloud.google.com/v1beta1
+kind: Service
+metadata:
+  labels:
+    environment: dev
+  name: dev-container.googleapis.com
+  namespace: gitlab
+---
+apiVersion: serviceusage.cnrm.cloud.google.com/v1beta1
+kind: Service
+metadata:
+  labels:
+    environment: dev
+  name: dev-redis.googleapis.com
+  namespace: gitlab
+---
+apiVersion: serviceusage.cnrm.cloud.google.com/v1beta1
+kind: Service
+metadata:
+  labels:
+    environment: dev
+  name: dev-servicenetworking.googleapis.com
+  namespace: gitlab
+---
+apiVersion: compute.cnrm.cloud.google.com/v1beta1
+kind: ComputeAddress
+metadata:
+  labels:
+    environment: dev
+  name: dev-gitlab
+  namespace: gitlab
+spec:
+  addressType: EXTERNAL
+  description: Gitlab Ingress IP
+  location: us-central1
+---
+apiVersion: compute.cnrm.cloud.google.com/v1beta1
+kind: ComputeAddress
+metadata:
+  labels:
+    environment: dev
+  name: dev-gitlab-sql
+  namespace: gitlab
+spec:
+  address: 10.1.0.0
+  addressType: INTERNAL
+  location: global
+  networkRef:
+    name: gitlab
+  prefixLength: 16
+  purpose: VPC_PEERING
+---
+apiVersion: compute.cnrm.cloud.google.com/v1beta1
+kind: ComputeNetwork
+metadata:
+  labels:
+    environment: dev
+  name: dev-gitlab
+  namespace: gitlab
+spec:
+  autoCreateSubnetworks: false
+---
+apiVersion: compute.cnrm.cloud.google.com/v1beta1
+kind: ComputeSubnetwork
+metadata:
+  labels:
+    environment: dev
+  name: dev-gitlab
+  namespace: gitlab
+spec:
+  ipCidrRange: 10.0.0.0/16
+  networkRef:
+    name: gitlab
+  region: us-central1
+  secondaryIpRange:
+  - ipCidrRange: 10.3.0.0/16
+    rangeName: gitlab-cluster-pod-cidr
+  - ipCidrRange: 10.2.0.0/16
+    rangeName: gitlab-cluster-service-cidr
+---
+apiVersion: container.cnrm.cloud.google.com/v1beta1
+kind: ContainerCluster
+metadata:
+  annotations:
+    cnrm.cloud.google.com/remove-default-node-pool: "true"
+  labels:
+    environment: dev
+  name: dev-gitlab
+  namespace: gitlab
+spec:
+  initialNodeCount: 1
+  ipAllocationPolicy:
+    clusterSecondaryRangeName: gitlab-cluster-pod-cidr
+    servicesSecondaryRangeName: gitlab-cluster-service-cidr
+  location: us-central1
+  masterAuth:
+    clientCertificateConfig:
+      issueClientCertificate: true
+  networkRef:
+    name: gitlab
+  subnetworkRef:
+    name: gitlab
+---
+apiVersion: container.cnrm.cloud.google.com/v1beta1
+kind: ContainerNodePool
+metadata:
+  labels:
+    environment: dev
+  name: dev-gitlab
+  namespace: gitlab
+spec:
+  clusterRef:
+    name: gitlab
+  location: us-central1
+  nodeConfig:
+    labels:
+      cluster_name: gitlab
+    machineType: n1-standard-4
+    metadata:
+      cluster_name: gitlab
+    oauthScopes:
+    - https://www.googleapis.com/auth/compute
+    - https://www.googleapis.com/auth/devstorage.read_only
+    - https://www.googleapis.com/auth/logging.write
+    - https://www.googleapis.com/auth/monitoring
+    serviceAccountRef:
+      name: gitlab-cluster
+  nodeCount: 1
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  labels:
+    environment: dev
+  name: dev-gitlab-gcs
+  namespace: gitlab
+spec:
+  member: serviceAccount:gitlab-gcs@myproject.iam.gserviceaccount.com
+  resourceRef:
+    apiVersion: resourcemanager.cnrm.cloud.google.com/v1beta1
+    external: projects/myproject
+    kind: Project
+  role: roles/storage.admin
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMServiceAccount
+metadata:
+  labels:
+    environment: dev
+  name: dev-gitlab-cluster
+  namespace: gitlab
+spec:
+  displayName: Service Account for GitLab cluster
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMServiceAccount
+metadata:
+  labels:
+    environment: dev
+  name: dev-gitlab-gcs
+  namespace: gitlab
+spec:
+  displayName: Gitlab Cloud Storage
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMServiceAccountKey
+metadata:
+  labels:
+    environment: dev
+  name: dev-gitlab-gcs
+  namespace: gitlab
+spec:
+  serviceAccountRef:
+    name: gitlab-gcs
+---
+apiVersion: redis.cnrm.cloud.google.com/v1beta1
+kind: RedisInstance
+metadata:
+  labels:
+    environment: dev
+  name: dev-gitlab
+  namespace: gitlab
+spec:
+  authorizedNetworkRef:
+    name: gitlab
+  displayName: Gitlab Redis
+  memorySizeGb: 5
+  region: us-central1
+  tier: STANDARD_HA
+---
+apiVersion: servicenetworking.cnrm.cloud.google.com/v1beta1
+kind: ServiceNetworkingConnection
+metadata:
+  labels:
+    environment: dev
+  name: dev-private-vpc-connection
+  namespace: gitlab
+spec:
+  networkRef:
+    name: gitlab
+  reservedPeeringRanges:
+  - name: gitlab-sql
+  service: servicenetworking.googleapis.com
+---
+apiVersion: sql.cnrm.cloud.google.com/v1beta1
+kind: SQLDatabase
+metadata:
+  labels:
+    environment: dev
+  name: dev-gitlabhq-production
+  namespace: gitlab
+spec:
+  instanceRef:
+    name: gitlab-db
+---
+apiVersion: sql.cnrm.cloud.google.com/v1beta1
+kind: SQLInstance
+metadata:
+  labels:
+    environment: dev
+  name: dev-gitlab-db
+  namespace: gitlab
+spec:
+  databaseVersion: POSTGRES_9_6
+  region: us-central1
+  settings:
+    activationPolicy: ALWAYS
+    backupConfiguration:
+      startTime: "14:00"
+    diskAutoresize: true
+    diskSize: 10
+    diskType: PD_SSD
+    ipConfiguration:
+      privateNetworkRef:
+        external: projects/myproject/global/networks/gitlab
+    locationPreference:
+      zone: us-central1-a
+    pricingPlan: PER_USE
+    replicationType: SYNCHRONOUS
+    tier: db-custom-4-15360
+---
+apiVersion: sql.cnrm.cloud.google.com/v1beta1
+kind: SQLUser
+metadata:
+  labels:
+    environment: dev
+  name: dev-gitlab
+  namespace: gitlab
+spec:
+  instanceRef:
+    name: gitlab-db
+  password:
+    valueFrom:
+      secretKeyRef:
+        key: password
+        name: gitlab-db-password
+---
+apiVersion: storage.cnrm.cloud.google.com/v1beta1
+kind: StorageBucket
+metadata:
+  annotations:
+    cnrm.cloud.google.com/force-destroy: "false"
+  labels:
+    environment: dev
+  name: dev-myproject-git-lfs
+  namespace: gitlab
+spec:
+  location: US-CENTRAL1
+  storageClass: STANDARD
+---
+apiVersion: storage.cnrm.cloud.google.com/v1beta1
+kind: StorageBucket
+metadata:
+  annotations:
+    cnrm.cloud.google.com/force-destroy: "false"
+  labels:
+    environment: dev
+  name: dev-myproject-git-packages
+  namespace: gitlab
+spec:
+  location: US-CENTRAL1
+  storageClass: STANDARD
+---
+apiVersion: storage.cnrm.cloud.google.com/v1beta1
+kind: StorageBucket
+metadata:
+  annotations:
+    cnrm.cloud.google.com/force-destroy: "false"
+  labels:
+    environment: dev
+  name: dev-myproject-gitlab-artifacts
+  namespace: gitlab
+spec:
+  location: US-CENTRAL1
+  storageClass: STANDARD
+---
+apiVersion: storage.cnrm.cloud.google.com/v1beta1
+kind: StorageBucket
+metadata:
+  annotations:
+    cnrm.cloud.google.com/force-destroy: "false"
+  labels:
+    environment: dev
+  name: dev-myproject-gitlab-backups
+  namespace: gitlab
+spec:
+  location: US-CENTRAL1
+  storageClass: STANDARD
+---
+apiVersion: storage.cnrm.cloud.google.com/v1beta1
+kind: StorageBucket
+metadata:
+  annotations:
+    cnrm.cloud.google.com/force-destroy: "false"
+  labels:
+    environment: dev
+  name: dev-myproject-gitlab-uploads
+  namespace: gitlab
+spec:
+  location: US-CENTRAL1
+  storageClass: STANDARD
+---
+apiVersion: storage.cnrm.cloud.google.com/v1beta1
+kind: StorageBucket
+metadata:
+  annotations:
+    cnrm.cloud.google.com/force-destroy: "false"
+  labels:
+    environment: dev
+  name: dev-myproject-pseudo
+  namespace: gitlab
+spec:
+  location: US-CENTRAL1
+  storageClass: STANDARD
+---
+apiVersion: storage.cnrm.cloud.google.com/v1beta1
+kind: StorageBucket
+metadata:
+  annotations:
+    cnrm.cloud.google.com/force-destroy: "false"
+  labels:
+    environment: dev
+  name: dev-myproject-registry
+  namespace: gitlab
+spec:
+  location: US-CENTRAL1
+  storageClass: STANDARD
+---
+apiVersion: storage.cnrm.cloud.google.com/v1beta1
+kind: StorageBucket
+metadata:
+  annotations:
+    cnrm.cloud.google.com/force-destroy: "false"
+  labels:
+    environment: dev
+  name: dev-myproject-runner-cache
+  namespace: gitlab
+spec:
+  location: US-CENTRAL1
+  storageClass: STANDARD
